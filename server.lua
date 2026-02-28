@@ -120,7 +120,7 @@ local function registerStashesForJob(job)
     end
 end
 
-RegisterNetEvent('lunar-jobcreator:server:saveJob', function(payload)
+RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
     local src = source
 
     if type(payload) ~= 'table' then

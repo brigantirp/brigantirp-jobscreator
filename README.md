@@ -1,4 +1,4 @@
-# Lunar Style JobCreator (FiveM)
+# BrigantiRP JobsCreator (FiveM)
 
 Resource FiveM con interfaccia NUI moderna per creare e gestire job in modo rapido.
 
@@ -18,7 +18,7 @@ Resource FiveM con interfaccia NUI moderna per creare e gestire job in modo rapi
 1. Copia la cartella nella tua `resources`.
 2. Aggiungi in `server.cfg`:
    ```cfg
-   ensure lunar-style-jobcreator
+   ensure brigantirp-jobscreator
    ```
 3. Avvia il server e usa `/jobcreator`.
 

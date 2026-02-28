@@ -37,7 +37,7 @@ RegisterNUICallback('saveJob', function(data, cb)
         return
     end
 
-    TriggerServerEvent('lunar-jobcreator:server:saveJob', data)
+    TriggerServerEvent('brigantirp-jobscreator:server:saveJob', data)
 
     TriggerEvent('chat:addMessage', {
         color = { 122, 255, 146 },

@@ -1,7 +1,7 @@
 fx_version 'cerulean'
 game 'gta5'
 
-name 'lunar-style-jobcreator'
+name 'brigantirp-jobscreator'
 author 'brigantirp'
 description 'Advanced FiveM Job Creator with modern NUI interface'
 version '1.0.0'
