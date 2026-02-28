@@ -9,7 +9,8 @@ Resource FiveM con interfaccia NUI moderna per creare e gestire job in modo rapi
 - Gestione dinamica di gradi e zone.
 - Export JSON, import JSON e copy clipboard.
 - Salvataggio locale automatico (`localStorage`).
-- Salvataggio server-side JSON in `data/jobs.json` (compatibile con setup Qbox).
+- Salvataggio server-side JSON in `data/jobs.json`.
+- Sync automatico su `qbx_core/shared/jobs.lua` ad ogni creazione/aggiornamento job.
 - Registrazione automatica stash su `ox_inventory` quando una zona è di tipo `stash`.
 - Apertura con comando `/jobcreator` (keybind `F7`).
 
@@ -25,10 +26,14 @@ Resource FiveM con interfaccia NUI moderna per creare e gestire job in modo rapi
 ## Qbox / Persistenza
 
 - Ogni salvataggio crea/aggiorna il job nel file `data/jobs.json` della resource.
+- Ogni salvataggio crea/aggiorna anche il job in `qbx_core/shared/jobs.lua` (blocco marcato `JOBSCREATOR:BEGIN/END`).
 - Nel JSON vengono salvati: job, grades, zones (garage, bossmenu, stash, armory, ecc.), opzioni e webhook.
 - Se `ox_inventory` è avviato, le zone `stash` vengono registrate automaticamente come stash runtime.
+- Se `qbx_core` non è in percorso standard, puoi forzare il path con convar:
+  ```cfg
+  set jobscreator_qbx_jobs_path "C:/path/to/resources/[qbx]/qbx_core/shared/jobs.lua"
+  ```
 
 ## Note
 
-Questo pacchetto salva ora lato server su file JSON.
-Se vuoi sincronizzare direttamente su DB/framework (es. tabelle job di Qbox), puoi aggiungere un adapter SQL nel `server.lua`.
+Questo pacchetto salva lato server su JSON e sincronizza il file jobs di Qbox.
