@@ -32,12 +32,19 @@ RegisterNUICallback('notify', function(data, cb)
 end)
 
 RegisterNUICallback('saveJob', function(data, cb)
+    if not data or type(data) ~= 'table' then
+        cb({ ok = false, error = 'Invalid payload' })
+        return
+    end
+
+    TriggerServerEvent('lunar-jobcreator:server:saveJob', data)
+
     TriggerEvent('chat:addMessage', {
         color = { 122, 255, 146 },
         multiline = false,
         args = {
             'JobCreator',
-            ('Job "%s" salvato in locale.'):format(data and data.label or 'Sconosciuto')
+            ('Job "%s" inviato al server.'):format(data.label or 'Sconosciuto')
         }
     })
 
