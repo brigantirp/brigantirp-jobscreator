@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrigantiRP JobsCreator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app" class="app hidden">
+        <aside class="sidebar glass">
+            <h1>JobCreator <span>Pro</span></h1>
+            <p class="subtitle">Crea lavori completi con flow super rapido.</p>
+            <nav class="menu" id="menu"></nav>
+            <button class="btn danger" id="closeBtn">Chiudi (ESC)</button>
+        </aside>
+
+        <main class="content">
+            <header class="topbar glass">
+                <div>
+                    <h2 id="sectionTitle">Panoramica</h2>
+                    <p id="sectionDescription">Imposta le informazioni base del tuo lavoro.</p>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn" id="resetBtn">Reset</button>
+                    <button class="btn primary" id="saveBtn">Salva job</button>
+                </div>
+            </header>
+
+            <section id="panelContainer" class="panels"></section>
+        </main>
+
+        <aside class="preview glass">
+            <h3>Anteprima Live</h3>
+            <p class="muted">Stile card come interfacce premium.</p>
+            <div class="job-card" id="jobCard"></div>
+            <div class="actions">
+                <button class="btn" id="copyJsonBtn">Copia JSON</button>
+                <button class="btn" id="downloadJsonBtn">Download</button>
+                <label class="btn secondary upload-label">
+                    Importa
+                    <input type="file" id="importInput" accept="application/json">
+                </label>
+            </div>
+        </aside>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
