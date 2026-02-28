@@ -46,7 +46,9 @@ const defaultJob = {
   }
 };
 
-let state = structuredClone(defaultJob);
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+let state = clone(defaultJob);
 let activeSection = 'base';
 
 const app = document.getElementById('app');
@@ -71,7 +73,7 @@ const loadLocal = () => {
   const cached = localStorage.getItem('jobcreator_state');
   if (!cached) return;
   try {
-    state = { ...structuredClone(defaultJob), ...JSON.parse(cached) };
+    state = { ...clone(defaultJob), ...JSON.parse(cached) };
   } catch (e) {
     console.warn('Invalid cache', e);
   }
@@ -293,7 +295,7 @@ document.getElementById('closeBtn').addEventListener('click', closeUi);
 document.addEventListener('keydown', (e) => e.key === 'Escape' && closeUi());
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-  state = structuredClone(defaultJob);
+  state = clone(defaultJob);
   saveLocal();
   render();
   notify('Template resettato ai valori di default.');
@@ -336,9 +338,9 @@ document.getElementById('importInput').addEventListener('change', async (e) => {
   try {
     const imported = JSON.parse(text);
     state = {
-      ...structuredClone(defaultJob),
+      ...clone(defaultJob),
       ...imported,
-      options: { ...structuredClone(defaultJob).options, ...(imported.options || {}) }
+      options: { ...clone(defaultJob).options, ...(imported.options || {}) }
     };
     saveLocal();
     render();
