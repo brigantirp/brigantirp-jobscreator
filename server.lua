@@ -1,5 +1,6 @@
 local RESOURCE_NAME = GetCurrentResourceName()
 local DATA_PATH = 'data/jobs.json'
+local QBX_JOBS_CONVAR = 'jobscreator_qbx_jobs_path'
 
 local cache = {
     jobs = {}
@@ -38,6 +39,132 @@ local function normalizeString(value, fallback)
     end
 
     return trimmed
+end
+
+local function escapeLuaPattern(value)
+    return value:gsub('([^%w])', '%%%1')
+end
+
+local function quoteLuaString(value)
+    return ('"%s"'):format(tostring(value):gsub('\\', '\\\\'):gsub('"', '\\"'))
+end
+
+local function resolveQbxJobsPath()
+    local configuredPath = normalizeString(GetConvar(QBX_JOBS_CONVAR, ''), '')
+    if configuredPath and configuredPath ~= '' then
+        return configuredPath
+    end
+
+    local qbxPath = GetResourcePath('qbx_core')
+    if not qbxPath or qbxPath == '' then
+        return nil
+    end
+
+    return ('%s/shared/jobs.lua'):format(qbxPath)
+end
+
+local function buildQbxJobBlock(job)
+    local gradesLines = {}
+
+    for index, grade in ipairs(job.grades) do
+        gradesLines[#gradesLines + 1] = (
+            "            ['%s'] = { name = %s, payment = %s, isboss = %s },"
+        ):format(index - 1, quoteLuaString(grade.name), math.max(0, math.floor(grade.salary or 0)), grade.boss and 'true' or 'false')
+    end
+
+    if #gradesLines == 0 then
+        gradesLines[1] = "            ['0'] = { name = \"grade_0\", payment = 0, isboss = false },"
+    end
+
+    local zoneLines = {}
+    for _, zone in ipairs(job.zones) do
+        zoneLines[#zoneLines + 1] = ('            { type = %s, coords = %s },'):format(quoteLuaString(zone.type), quoteLuaString(zone.coords))
+    end
+
+    local zonesBlock = #zoneLines > 0 and table.concat(zoneLines, '\n') or '            -- nessuna zona configurata'
+
+    return ([[    -- JOBSCREATOR:BEGIN %s
+    [%s] = {
+        label = %s,
+        type = %s,
+        defaultDuty = true,
+        offDutyPay = false,
+        description = %s,
+        icon = %s,
+        color = %s,
+        webhook = %s,
+        zones = {
+%s
+        },
+        options = {
+            canHandcuff = %s,
+            canImpound = %s,
+            dutySystem = %s,
+            billingEnabled = %s,
+            whitelistOnly = %s,
+        },
+        grades = {
+%s
+        },
+    },
+    -- JOBSCREATOR:END %s]]):format(
+        job.name,
+        quoteLuaString(job.name),
+        quoteLuaString(job.label),
+        quoteLuaString(job.type),
+        quoteLuaString(job.description),
+        quoteLuaString(job.icon),
+        quoteLuaString(job.color),
+        quoteLuaString(job.webhook),
+        zonesBlock,
+        job.options.canHandcuff and 'true' or 'false',
+        job.options.canImpound and 'true' or 'false',
+        job.options.dutySystem and 'true' or 'false',
+        job.options.billingEnabled and 'true' or 'false',
+        job.options.whitelistOnly and 'true' or 'false',
+        table.concat(gradesLines, '\n'),
+        job.name
+    )
+end
+
+local function persistJobToQbxCore(job)
+    local jobsPath = resolveQbxJobsPath()
+    if not jobsPath then
+        return false, ('Impossibile risolvere il path di qbx_core/shared/jobs.lua. Configura +set %s <path_assoluto>.'):format(QBX_JOBS_CONVAR)
+    end
+
+    local readHandle, readErr = io.open(jobsPath, 'r')
+    if not readHandle then
+        return false, ('Impossibile leggere %s: %s'):format(jobsPath, readErr or 'errore sconosciuto')
+    end
+
+    local content = readHandle:read('*a')
+    readHandle:close()
+
+    local escapedName = escapeLuaPattern(job.name)
+    content = content:gsub(('%s%-%- JOBSCREATOR:BEGIN %s.-%-%- JOBSCREATOR:END %s\n?'):format('%s*', escapedName, escapedName), '')
+
+    local closingIndex = content:find('}%s*$')
+    if not closingIndex then
+        return false, ('Il file %s non sembra un jobs.lua valido (manca la parentesi finale).'):format(jobsPath)
+    end
+
+    local block = buildQbxJobBlock(job)
+    local updatedContent = content:sub(1, closingIndex - 1)
+        .. '\n\n'
+        .. block
+        .. '\n'
+        .. content:sub(closingIndex)
+
+    local writeHandle, writeErr = io.open(jobsPath, 'w')
+    if not writeHandle then
+        return false, ('Impossibile scrivere %s: %s'):format(jobsPath, writeErr or 'errore sconosciuto')
+    end
+
+    writeHandle:write(updatedContent)
+    writeHandle:close()
+
+    return true, jobsPath
 end
 
 local function normalizeJob(payload)
@@ -144,16 +271,23 @@ RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
 
     local mode = upsertJob(job)
     persistJobs()
+    local qbxSaved, qbxResult = persistJobToQbxCore(job)
     registerStashesForJob(job)
 
     TriggerClientEvent('chat:addMessage', src, {
-        color = { 122, 255, 146 },
+        color = qbxSaved and { 122, 255, 146 } or { 255, 170, 80 },
         multiline = false,
         args = {
             'JobCreator',
-            ('Job "%s" %s e salvato lato server. Totale jobs: %s'):format(job.label, mode == 'created' and 'creato' or 'aggiornato', #cache.jobs)
+            qbxSaved
+                and ('Job "%s" %s. JSON aggiornato + jobs.lua sincronizzato (%s). Totale jobs: %s'):format(job.label, mode == 'created' and 'creato' or 'aggiornato', qbxResult, #cache.jobs)
+                or ('Job "%s" salvato solo su JSON. Sync jobs.lua fallita: %s'):format(job.label, qbxResult)
         }
     })
+
+    if not qbxSaved then
+        print(('[%s] qbx_core sync failed for job %s: %s'):format(RESOURCE_NAME, job.name, qbxResult))
+    end
 end)
 
 CreateThread(function()
