@@ -273,12 +273,21 @@ local function persistJobToQbxExports(job)
     end
 
     local payload = buildQbxExportJobPayload(job)
-    local attempts = {
-        { name = 'CreateJob', args = { job.name, payload } },
-        { name = 'AddJob', args = { job.name, payload } },
-        { name = 'UpsertJob', args = { job.name, payload } },
-        { name = 'SetJob', args = { job.name, payload } }
+    local packedPayload = {
+        [job.name] = payload
     }
+
+    local attempts = {
+        -- Nuove/vecchie varianti usate da diverse build di qbx_core.
+        { name = 'CreateJob', args = { job.name, payload } },
+        { name = 'CreateJobs', args = { packedPayload } },
+        { name = 'AddJob', args = { job.name, payload } },
+        { name = 'AddJobs', args = { packedPayload } },
+        { name = 'UpsertJob', args = { job.name, payload } },
+        { name = 'UpsertJobs', args = { packedPayload } }
+    }
+
+    local failures = {}
 
     for _, attempt in ipairs(attempts) do
         local ok, result = pcall(function()
@@ -288,9 +297,15 @@ local function persistJobToQbxExports(job)
         if ok and result ~= false then
             return true, attempt.name
         end
+
+        failures[#failures + 1] = ('%s: %s'):format(
+            attempt.name,
+            ok and 'ritornato false'
+                or tostring(result or 'errore sconosciuto')
+        )
     end
 
-    return false, 'Nessun export compatibile trovato (CreateJob/AddJob/UpsertJob/SetJob).'
+    return false, ('Nessun export compatibile trovato. Tentativi: %s'):format(table.concat(failures, ' | '))
 end
 
 local function normalizeJob(payload)
