@@ -49,6 +49,15 @@ local function quoteLuaString(value)
     return ('"%s"'):format(tostring(value):gsub('\\', '\\\\'):gsub('"', '\\"'))
 end
 
+local function getResourceFilePath(resourceName, filePath)
+    local resourcePath = normalizeString(GetResourcePath(resourceName), nil)
+    if not resourcePath then
+        return nil
+    end
+
+    return ('%s/%s'):format(resourcePath:gsub('\\', '/'), filePath)
+end
+
 local function resolveQbxJobsPath()
     local configuredPath = normalizeString(GetConvar(QBX_JOBS_CONVAR, ''), '')
     if configuredPath and configuredPath ~= '' then
@@ -178,11 +187,24 @@ local function persistJobToQbxCore(job)
 
     if target.mode == 'resource' then
         local saved = SaveResourceFile(target.resource, target.file, updatedContent, -1)
-        if not saved then
-            return false, ('Impossibile scrivere %s tramite SaveResourceFile.'):format(displayPath)
+        if saved then
+            return true, displayPath
         end
 
-        return true, displayPath
+        local fallbackPath = getResourceFilePath(target.resource, target.file)
+        if not fallbackPath then
+            return false, ('Impossibile scrivere %s tramite SaveResourceFile e non è stato possibile risolvere il path locale della resource.'):format(displayPath)
+        end
+
+        local writeHandle, writeErr = io.open(fallbackPath, 'w')
+        if not writeHandle then
+            return false, ('Impossibile scrivere %s tramite SaveResourceFile e fallback su filesystem fallito (%s).'):format(displayPath, writeErr or 'errore sconosciuto')
+        end
+
+        writeHandle:write(updatedContent)
+        writeHandle:close()
+
+        return true, ('%s (fallback filesystem)'):format(fallbackPath)
     end
 
     local writeHandle, writeErr = io.open(displayPath, 'w')
