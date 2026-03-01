@@ -257,7 +257,7 @@ local function buildQbxExportJobPayload(job)
     local grades = {}
 
     for index, grade in ipairs(job.grades) do
-        grades[tostring(index - 1)] = {
+        grades[index - 1] = {
             name = grade.name,
             payment = math.max(0, math.floor(grade.salary or 0)),
             isboss = grade.boss and true or false
@@ -265,7 +265,7 @@ local function buildQbxExportJobPayload(job)
     end
 
     if not next(grades) then
-        grades['0'] = {
+        grades[0] = {
             name = 'grade_0',
             payment = 0,
             isboss = false
