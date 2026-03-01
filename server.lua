@@ -26,11 +26,25 @@ end
 local function persistJobs()
     local encoded = json.encode(cache.jobs)
     local ok = SaveResourceFile(RESOURCE_NAME, DATA_PATH, encoded, -1)
-    if not ok then
-        print(('[%s] Failed to persist %s with SaveResourceFile.'):format(RESOURCE_NAME, DATA_PATH))
+    if ok then
+        return true
     end
 
-    return ok == true
+    local resourcePath = GetResourcePath(RESOURCE_NAME)
+    local filesystemPath = (type(resourcePath) == 'string' and resourcePath ~= '') and ((resourcePath:gsub('\\', '/')) .. '/' .. DATA_PATH) or nil
+    if filesystemPath then
+        local handle, err = io.open(filesystemPath, 'w')
+        if handle then
+            handle:write(encoded)
+            handle:close()
+            return true
+        end
+
+        print(('[%s] Failed to persist %s via filesystem fallback: %s'):format(RESOURCE_NAME, DATA_PATH, err or 'errore sconosciuto'))
+    end
+
+    print(('[%s] Failed to persist %s with SaveResourceFile.'):format(RESOURCE_NAME, DATA_PATH))
+    return false
 end
 
 local function normalizeString(value, fallback)
@@ -243,7 +257,7 @@ local function buildQbxExportJobPayload(job)
     local grades = {}
 
     for index, grade in ipairs(job.grades) do
-        grades[tostring(index - 1)] = {
+        grades[index - 1] = {
             name = grade.name,
             payment = math.max(0, math.floor(grade.salary or 0)),
             isboss = grade.boss and true or false
@@ -251,7 +265,7 @@ local function buildQbxExportJobPayload(job)
     end
 
     if not next(grades) then
-        grades['0'] = {
+        grades[0] = {
             name = 'grade_0',
             payment = 0,
             isboss = false
@@ -273,12 +287,24 @@ local function persistJobToQbxExports(job)
     end
 
     local payload = buildQbxExportJobPayload(job)
-    local attempts = {
-        { name = 'CreateJob', args = { job.name, payload } },
-        { name = 'AddJob', args = { job.name, payload } },
-        { name = 'UpsertJob', args = { job.name, payload } },
-        { name = 'SetJob', args = { job.name, payload } }
+    local packedPayload = {
+        [job.name] = payload
     }
+
+    local attempts = {
+        -- Varianti usate da diverse build qbx_core, con shape argomenti differenti.
+        { name = 'CreateJob', args = { job.name, payload } },
+        { name = 'CreateJob', args = { packedPayload } },
+        { name = 'CreateJobs', args = { packedPayload } },
+        { name = 'CreateJobs', args = { job.name, payload } },
+        { name = 'SetJob', args = { job.name, payload } },
+        { name = 'AddJob', args = { job.name, payload } },
+        { name = 'AddJobs', args = { packedPayload } },
+        { name = 'UpsertJob', args = { job.name, payload } },
+        { name = 'UpsertJobs', args = { packedPayload } }
+    }
+
+    local failures = {}
 
     for _, attempt in ipairs(attempts) do
         local ok, result = pcall(function()
@@ -288,9 +314,15 @@ local function persistJobToQbxExports(job)
         if ok and result ~= false then
             return true, attempt.name
         end
+
+        failures[#failures + 1] = ('%s: %s'):format(
+            attempt.name,
+            ok and 'ritornato false'
+                or tostring(result or 'errore sconosciuto')
+        )
     end
 
-    return false, 'Nessun export compatibile trovato (CreateJob/AddJob/UpsertJob/SetJob).'
+    return false, ('Nessun export compatibile trovato. Tentativi: %s'):format(table.concat(failures, ' | '))
 end
 
 local function normalizeJob(payload)
