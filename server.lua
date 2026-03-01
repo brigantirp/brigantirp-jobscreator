@@ -287,17 +287,30 @@ local function persistJobToQbxExports(job)
     end
 
     local payload = buildQbxExportJobPayload(job)
+    local namedPayload = {
+        name = job.name,
+        label = payload.label,
+        type = payload.type,
+        defaultDuty = payload.defaultDuty,
+        offDutyPay = payload.offDutyPay,
+        grades = payload.grades
+    }
     local packedPayload = {
         [job.name] = payload
+    }
+    local packedNamedPayload = {
+        [job.name] = namedPayload
     }
 
     local attempts = {
         -- Varianti usate da diverse build qbx_core, con shape argomenti differenti.
         { name = 'CreateJob', args = { job.name, payload } },
+        { name = 'CreateJob', args = { namedPayload } },
         { name = 'CreateJob', args = { packedPayload } },
+        { name = 'CreateJob', args = { packedNamedPayload } },
         { name = 'CreateJobs', args = { packedPayload } },
+        { name = 'CreateJobs', args = { packedNamedPayload } },
         { name = 'CreateJobs', args = { job.name, payload } },
-        { name = 'SetJob', args = { job.name, payload } },
         { name = 'AddJob', args = { job.name, payload } },
         { name = 'AddJobs', args = { packedPayload } },
         { name = 'UpsertJob', args = { job.name, payload } },
@@ -318,7 +331,7 @@ local function persistJobToQbxExports(job)
         failures[#failures + 1] = ('%s: %s'):format(
             attempt.name,
             ok and 'ritornato false'
-                or tostring(result or 'errore sconosciuto')
+                or tostring((type(result) == 'string' and result ~= '' and result) or 'errore sconosciuto')
         )
     end
 
