@@ -150,16 +150,28 @@ local function persistJobToQbxCore(job)
 
     local content
     local displayPath
+    local filesystemPath
 
     if target.mode == 'resource' then
         content = LoadResourceFile(target.resource, target.file)
         displayPath = ('%s/%s'):format(target.resource, target.file)
+        filesystemPath = getResourceFilePath(target.resource, target.file)
 
-        if not content or content == '' then
+        if (not content or content == '') and filesystemPath then
+            local readHandle, readErr = io.open(filesystemPath, 'r')
+            if readHandle then
+                content = readHandle:read('*a')
+                readHandle:close()
+                displayPath = ('%s (filesystem)'):format(filesystemPath)
+            else
+                return false, ('Impossibile leggere %s tramite LoadResourceFile e fallback filesystem fallito (%s).'):format(displayPath, readErr or 'errore sconosciuto')
+            end
+        elseif not content or content == '' then
             return false, ('Impossibile leggere %s tramite LoadResourceFile.'):format(displayPath)
         end
     else
         displayPath = target.path
+        filesystemPath = target.path
         local readHandle, readErr = io.open(displayPath, 'r')
         if not readHandle then
             return false, ('Impossibile leggere %s: %s'):format(displayPath, readErr or 'errore sconosciuto')
@@ -185,37 +197,30 @@ local function persistJobToQbxCore(job)
         .. '\n'
         .. content:sub(closingIndex)
 
+    if filesystemPath then
+        local writeHandle, writeErr = io.open(filesystemPath, 'w')
+        if not writeHandle then
+            if target.mode ~= 'resource' then
+                return false, ('Impossibile scrivere %s: %s'):format(displayPath, writeErr or 'errore sconosciuto')
+            end
+        else
+            writeHandle:write(updatedContent)
+            writeHandle:close()
+
+            return true, ('%s (filesystem)'):format(filesystemPath)
+        end
+    end
+
     if target.mode == 'resource' then
         local saved = SaveResourceFile(target.resource, target.file, updatedContent, -1)
         if saved then
             return true, displayPath
         end
 
-        local fallbackPath = getResourceFilePath(target.resource, target.file)
-        if not fallbackPath then
-            return false, ('Impossibile scrivere %s tramite SaveResourceFile e non è stato possibile risolvere il path locale della resource.'):format(displayPath)
-        end
-
-        local writeHandle, writeErr = io.open(fallbackPath, 'w')
-        if not writeHandle then
-            return false, ('Impossibile scrivere %s tramite SaveResourceFile e fallback su filesystem fallito (%s).'):format(displayPath, writeErr or 'errore sconosciuto')
-        end
-
-        writeHandle:write(updatedContent)
-        writeHandle:close()
-
-        return true, ('%s (fallback filesystem)'):format(fallbackPath)
+        return false, ('Impossibile scrivere %s tramite filesystem e SaveResourceFile ha restituito false.'):format(displayPath)
     end
 
-    local writeHandle, writeErr = io.open(displayPath, 'w')
-    if not writeHandle then
-        return false, ('Impossibile scrivere %s: %s'):format(displayPath, writeErr or 'errore sconosciuto')
-    end
-
-    writeHandle:write(updatedContent)
-    writeHandle:close()
-
-    return true, displayPath
+    return false, ('Impossibile determinare una strategia di scrittura valida per %s.'):format(displayPath)
 end
 
 local function normalizeJob(payload)
