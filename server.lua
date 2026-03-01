@@ -275,13 +275,9 @@ local function persistJobToQbxExports(job)
     local payload = buildQbxExportJobPayload(job)
     local attempts = {
         { name = 'CreateJob', args = { job.name, payload } },
-        { name = 'CreateJob', args = { payload } },
         { name = 'AddJob', args = { job.name, payload } },
-        { name = 'AddJob', args = { payload } },
         { name = 'UpsertJob', args = { job.name, payload } },
-        { name = 'UpsertJob', args = { payload } },
-        { name = 'SetJob', args = { job.name, payload } },
-        { name = 'SetJob', args = { payload } }
+        { name = 'SetJob', args = { job.name, payload } }
     }
 
     for _, attempt in ipairs(attempts) do
