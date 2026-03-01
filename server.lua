@@ -25,7 +25,12 @@ end
 
 local function persistJobs()
     local encoded = json.encode(cache.jobs)
-    SaveResourceFile(RESOURCE_NAME, DATA_PATH, encoded, -1)
+    local ok = SaveResourceFile(RESOURCE_NAME, DATA_PATH, encoded, -1)
+    if not ok then
+        print(('[%s] Failed to persist %s with SaveResourceFile.'):format(RESOURCE_NAME, DATA_PATH))
+    end
+
+    return ok == true
 end
 
 local function normalizeString(value, fallback)
@@ -234,6 +239,64 @@ local function persistJobToQbxCore(job)
     return false, ('Impossibile determinare una strategia di scrittura valida per %s.'):format(displayPath)
 end
 
+local function buildQbxExportJobPayload(job)
+    local grades = {}
+
+    for index, grade in ipairs(job.grades) do
+        grades[tostring(index - 1)] = {
+            name = grade.name,
+            payment = math.max(0, math.floor(grade.salary or 0)),
+            isboss = grade.boss and true or false
+        }
+    end
+
+    if not next(grades) then
+        grades['0'] = {
+            name = 'grade_0',
+            payment = 0,
+            isboss = false
+        }
+    end
+
+    return {
+        label = job.label,
+        type = job.type,
+        defaultDuty = true,
+        offDutyPay = false,
+        grades = grades
+    }
+end
+
+local function persistJobToQbxExports(job)
+    if GetResourceState('qbx_core') ~= 'started' then
+        return false, 'qbx_core non avviato'
+    end
+
+    local payload = buildQbxExportJobPayload(job)
+    local attempts = {
+        { name = 'CreateJob', args = { job.name, payload } },
+        { name = 'CreateJob', args = { payload } },
+        { name = 'AddJob', args = { job.name, payload } },
+        { name = 'AddJob', args = { payload } },
+        { name = 'UpsertJob', args = { job.name, payload } },
+        { name = 'UpsertJob', args = { payload } },
+        { name = 'SetJob', args = { job.name, payload } },
+        { name = 'SetJob', args = { payload } }
+    }
+
+    for _, attempt in ipairs(attempts) do
+        local ok, result = pcall(function()
+            return exports.qbx_core[attempt.name](table.unpack(attempt.args))
+        end)
+
+        if ok and result ~= false then
+            return true, attempt.name
+        end
+    end
+
+    return false, 'Nessun export compatibile trovato (CreateJob/AddJob/UpsertJob/SetJob).'
+end
+
 local function normalizeJob(payload)
     local job = {
         name = normalizeString(payload.name, nil),
@@ -337,23 +400,43 @@ RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
     end
 
     local mode = upsertJob(job)
-    persistJobs()
+    local jsonSaved = persistJobs()
+    local exportSaved, exportResult = persistJobToQbxExports(job)
     local qbxSaved, qbxResult = persistJobToQbxCore(job)
     registerStashesForJob(job)
 
     TriggerClientEvent('chat:addMessage', src, {
-        color = qbxSaved and { 122, 255, 146 } or { 255, 170, 80 },
+        color = (jsonSaved and (qbxSaved or exportSaved)) and { 122, 255, 146 } or { 255, 170, 80 },
         multiline = false,
         args = {
             'JobCreator',
-            qbxSaved
-                and ('Job "%s" %s. JSON aggiornato + jobs.lua sincronizzato (%s). Totale jobs: %s'):format(job.label, mode == 'created' and 'creato' or 'aggiornato', qbxResult, #cache.jobs)
-                or ('Job "%s" salvato solo su JSON. Sync jobs.lua fallita: %s'):format(job.label, qbxResult)
+            (jsonSaved and (qbxSaved or exportSaved))
+                and ('Job "%s" %s. JSON: ok. Export qbx_core: %s. jobs.lua: %s. Totale jobs: %s'):format(
+                    job.label,
+                    mode == 'created' and 'creato' or 'aggiornato',
+                    exportSaved and ('ok (' .. exportResult .. ')') or ('fallito (' .. exportResult .. ')'),
+                    qbxSaved and ('ok (' .. qbxResult .. ')') or ('fallito (' .. qbxResult .. ')'),
+                    #cache.jobs
+                )
+                or ('Job "%s" NON salvato correttamente. JSON: %s. Export qbx_core: %s. jobs.lua: %s'):format(
+                    job.label,
+                    jsonSaved and 'ok' or 'fallito',
+                    exportSaved and ('ok (' .. exportResult .. ')') or ('fallito (' .. exportResult .. ')'),
+                    qbxSaved and ('ok (' .. qbxResult .. ')') or ('fallito (' .. qbxResult .. ')')
+                )
         }
     })
 
+    if not jsonSaved then
+        print(('[%s] JSON persist failed for job %s'):format(RESOURCE_NAME, job.name))
+    end
+
+    if not exportSaved then
+        print(('[%s] qbx_core export sync failed for job %s: %s'):format(RESOURCE_NAME, job.name, exportResult))
+    end
+
     if not qbxSaved then
-        print(('[%s] qbx_core sync failed for job %s: %s'):format(RESOURCE_NAME, job.name, qbxResult))
+        print(('[%s] qbx_core jobs.lua sync failed for job %s: %s'):format(RESOURCE_NAME, job.name, qbxResult))
     end
 end)
 

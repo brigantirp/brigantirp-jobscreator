@@ -27,6 +27,7 @@ Resource FiveM con interfaccia NUI moderna per creare e gestire job in modo rapi
 
 - Ogni salvataggio crea/aggiorna il job nel file `data/jobs.json` della resource.
 - Ogni salvataggio crea/aggiorna anche il job in `qbx_core/shared/jobs.lua` (blocco marcato `JOBSCREATOR:BEGIN/END`).
+- Ogni salvataggio prova anche la sync runtime tramite export di `qbx_core` (`CreateJob` / `AddJob` / `UpsertJob` / `SetJob`) per compatibilità con diverse versioni.
 - Se `SaveResourceFile` su `qbx_core` fallisce (alcuni artifact/build), il resource prova automaticamente un fallback scrivendo direttamente nel percorso locale della resource.
 - Nel JSON vengono salvati: job, grades, zones (garage, bossmenu, stash, armory, ecc.), opzioni e webhook.
 - Se `ox_inventory` è avviato, le zone `stash` vengono registrate automaticamente come stash runtime.
