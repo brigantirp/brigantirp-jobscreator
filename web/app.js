@@ -135,14 +135,19 @@ const renderSection = (section) => {
           <div class="list-box">
             ${state.grades.map((grade, index) => `
               <div class="list-row">
+                <input data-grade="${index}" data-key="name" value="${grade.name}" placeholder="Nome tecnico">
                 <input data-grade="${index}" data-key="label" value="${grade.label}">
                 <input type="number" min="0" data-grade="${index}" data-key="salary" value="${grade.salary}">
+                <select data-grade="${index}" data-key="boss">
+                  <option value="false" ${!grade.boss ? 'selected' : ''}>No boss</option>
+                  <option value="true" ${grade.boss ? 'selected' : ''}>Boss</option>
+                </select>
                 <button class="btn" data-remove-grade="${index}">Rimuovi</button>
               </div>
             `).join('')}
             <button class="btn secondary" id="addGradeBtn">Aggiungi grado</button>
           </div>
-          <p class="notice">Tip: puoi mettere il boss flag dal JSON export (campo boss: true).</p>
+          <p class="notice">Puoi modificare nome tecnico, label, stipendio e permesso boss direttamente da qui.</p>
         </div>
       </div>
     `;
@@ -203,7 +208,7 @@ const renderPreview = () => {
       <span class="badge">Type: ${state.type}</span>
       <span class="badge">Gradi: ${state.grades.length}</span>
       <span class="badge">Zone: ${state.zones.length}</span>
-      <span class="badge">Payroll max: $${Math.max(...state.grades.map(g => Number(g.salary) || 0))}</span>
+      <span class="badge">Payroll max: $${Math.max(0, ...state.grades.map(g => Number(g.salary) || 0))}</span>
     </div>
   `;
 };
@@ -218,7 +223,16 @@ const parseFormEvents = (target) => {
   const gradeIndex = target.dataset.grade;
   if (gradeIndex !== undefined) {
     const key = target.dataset.key;
-    const value = key === 'salary' ? Number(target.value) : target.value;
+    let value;
+
+    if (key === 'salary') {
+      value = Number(target.value);
+    } else if (key === 'boss') {
+      value = target.value === 'true';
+    } else {
+      value = target.value;
+    }
+
     state.grades[Number(gradeIndex)][key] = value;
     return;
   }
