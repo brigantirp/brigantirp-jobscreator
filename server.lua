@@ -26,11 +26,25 @@ end
 local function persistJobs()
     local encoded = json.encode(cache.jobs)
     local ok = SaveResourceFile(RESOURCE_NAME, DATA_PATH, encoded, -1)
-    if not ok then
-        print(('[%s] Failed to persist %s with SaveResourceFile.'):format(RESOURCE_NAME, DATA_PATH))
+    if ok then
+        return true
     end
 
-    return ok == true
+    local resourcePath = GetResourcePath(RESOURCE_NAME)
+    local filesystemPath = (type(resourcePath) == 'string' and resourcePath ~= '') and ((resourcePath:gsub('\\', '/')) .. '/' .. DATA_PATH) or nil
+    if filesystemPath then
+        local handle, err = io.open(filesystemPath, 'w')
+        if handle then
+            handle:write(encoded)
+            handle:close()
+            return true
+        end
+
+        print(('[%s] Failed to persist %s via filesystem fallback: %s'):format(RESOURCE_NAME, DATA_PATH, err or 'errore sconosciuto'))
+    end
+
+    print(('[%s] Failed to persist %s with SaveResourceFile.'):format(RESOURCE_NAME, DATA_PATH))
+    return false
 end
 
 local function normalizeString(value, fallback)
@@ -273,12 +287,32 @@ local function persistJobToQbxExports(job)
     end
 
     local payload = buildQbxExportJobPayload(job)
-    local attempts = {
-        { name = 'CreateJob', args = { job.name, payload } },
-        { name = 'AddJob', args = { job.name, payload } },
-        { name = 'UpsertJob', args = { job.name, payload } },
-        { name = 'SetJob', args = { job.name, payload } }
+    local namedPayload = {
+        name = job.name,
+        label = payload.label,
+        type = payload.type,
+        defaultDuty = payload.defaultDuty,
+        offDutyPay = payload.offDutyPay,
+        grades = payload.grades
     }
+    local packedPayload = {
+        [job.name] = payload
+    }
+    local packedNamedPayload = {
+        [job.name] = namedPayload
+    }
+
+    local attempts = {
+        -- Alcune build accettano shape differenti ma solo Create*.
+        { name = 'CreateJob', args = { job.name, payload } },
+        { name = 'CreateJob', args = { namedPayload } },
+        { name = 'CreateJob', args = { packedPayload } },
+        { name = 'CreateJob', args = { packedNamedPayload } },
+        { name = 'CreateJobs', args = { packedPayload } },
+        { name = 'CreateJobs', args = { packedNamedPayload } }
+    }
+
+    local failures = {}
 
     for _, attempt in ipairs(attempts) do
         local ok, result = pcall(function()
@@ -288,9 +322,15 @@ local function persistJobToQbxExports(job)
         if ok and result ~= false then
             return true, attempt.name
         end
+
+        failures[#failures + 1] = ('%s: %s'):format(
+            attempt.name,
+            ok and 'ritornato false'
+                or tostring((type(result) == 'string' and result ~= '' and result) or 'errore sconosciuto')
+        )
     end
 
-    return false, 'Nessun export compatibile trovato (CreateJob/AddJob/UpsertJob/SetJob).'
+    return false, ('Nessun export compatibile trovato. Tentativi: %s'):format(table.concat(failures, ' | '))
 end
 
 local function normalizeJob(payload)
@@ -427,7 +467,7 @@ RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
         print(('[%s] JSON persist failed for job %s'):format(RESOURCE_NAME, job.name))
     end
 
-    if not exportSaved then
+    if not exportSaved and not qbxSaved then
         print(('[%s] qbx_core export sync failed for job %s: %s'):format(RESOURCE_NAME, job.name, exportResult))
     end
 
