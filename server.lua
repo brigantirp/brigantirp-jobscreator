@@ -142,12 +142,8 @@ local function persistJobToQbxCore(job)
     readHandle:close()
 
     local escapedName = escapeLuaPattern(job.name)
-    local existingBlockPattern = '%s*%-%- JOBSCREATOR:BEGIN '
-        .. escapedName
-        .. '.-%-%- JOBSCREATOR:END '
-        .. escapedName
-        .. '\n?'
-    content = content:gsub(existingBlockPattern, '')
+    local markerPattern = '%s*%-%- JOBSCREATOR:BEGIN ' .. escapedName .. '.-%-%- JOBSCREATOR:END ' .. escapedName .. '\n?'
+    content = content:gsub(markerPattern, '')
 
     local closingIndex = content:find('}%s*$')
     if not closingIndex then
