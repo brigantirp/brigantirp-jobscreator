@@ -303,18 +303,13 @@ local function persistJobToQbxExports(job)
     }
 
     local attempts = {
-        -- Varianti usate da diverse build qbx_core, con shape argomenti differenti.
+        -- Alcune build accettano shape differenti ma solo Create*.
         { name = 'CreateJob', args = { job.name, payload } },
         { name = 'CreateJob', args = { namedPayload } },
         { name = 'CreateJob', args = { packedPayload } },
         { name = 'CreateJob', args = { packedNamedPayload } },
         { name = 'CreateJobs', args = { packedPayload } },
-        { name = 'CreateJobs', args = { packedNamedPayload } },
-        { name = 'CreateJobs', args = { job.name, payload } },
-        { name = 'AddJob', args = { job.name, payload } },
-        { name = 'AddJobs', args = { packedPayload } },
-        { name = 'UpsertJob', args = { job.name, payload } },
-        { name = 'UpsertJobs', args = { packedPayload } }
+        { name = 'CreateJobs', args = { packedNamedPayload } }
     }
 
     local failures = {}
@@ -472,7 +467,7 @@ RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
         print(('[%s] JSON persist failed for job %s'):format(RESOURCE_NAME, job.name))
     end
 
-    if not exportSaved then
+    if not exportSaved and not qbxSaved then
         print(('[%s] qbx_core export sync failed for job %s: %s'):format(RESOURCE_NAME, job.name, exportResult))
     end
 
