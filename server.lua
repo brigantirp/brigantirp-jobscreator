@@ -437,8 +437,13 @@ RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
 
     local mode = upsertJob(job)
     local jsonSaved = persistJobs()
-    local exportSaved, exportResult = persistJobToQbxExports(job)
     local qbxSaved, qbxResult = persistJobToQbxCore(job)
+
+    local exportSaved, exportResult = false, 'skip (jobs.lua sincronizzato)'
+    if not qbxSaved then
+        exportSaved, exportResult = persistJobToQbxExports(job)
+    end
+
     registerStashesForJob(job)
 
     TriggerClientEvent('chat:addMessage', src, {
@@ -450,14 +455,14 @@ RegisterNetEvent('brigantirp-jobscreator:server:saveJob', function(payload)
                 and ('Job "%s" %s. JSON: ok. Export qbx_core: %s. jobs.lua: %s. Totale jobs: %s'):format(
                     job.label,
                     mode == 'created' and 'creato' or 'aggiornato',
-                    exportSaved and ('ok (' .. exportResult .. ')') or ('fallito (' .. exportResult .. ')'),
+                    qbxSaved and 'skip (jobs.lua sincronizzato)' or (exportSaved and ('ok (' .. exportResult .. ')') or ('fallito (' .. exportResult .. ')')),
                     qbxSaved and ('ok (' .. qbxResult .. ')') or ('fallito (' .. qbxResult .. ')'),
                     #cache.jobs
                 )
                 or ('Job "%s" NON salvato correttamente. JSON: %s. Export qbx_core: %s. jobs.lua: %s'):format(
                     job.label,
                     jsonSaved and 'ok' or 'fallito',
-                    exportSaved and ('ok (' .. exportResult .. ')') or ('fallito (' .. exportResult .. ')'),
+                    qbxSaved and 'skip (jobs.lua sincronizzato)' or (exportSaved and ('ok (' .. exportResult .. ')') or ('fallito (' .. exportResult .. ')')),
                     qbxSaved and ('ok (' .. qbxResult .. ')') or ('fallito (' .. qbxResult .. ')')
                 )
         }
