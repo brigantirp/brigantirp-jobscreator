@@ -185,17 +185,28 @@ local function persistJobToQbxCore(job)
     local markerPattern = '%s*%-%- JOBSCREATOR:BEGIN ' .. escapedName .. '.-%-%- JOBSCREATOR:END ' .. escapedName .. '\n?'
     content = content:gsub(markerPattern, '')
 
-    local closingIndex = content:find('}%s*$')
-    if not closingIndex then
-        return false, ('Il file %s non sembra un jobs.lua valido (manca la parentesi finale).'):format(displayPath)
-    end
-
     local block = buildQbxJobBlock(job)
-    local updatedContent = content:sub(1, closingIndex - 1)
-        .. '\n\n'
-        .. block
-        .. '\n'
-        .. content:sub(closingIndex)
+    local returnIndex = content:find('\n%s*return%s+[%w_%.]+%s*;?%s*$')
+    local updatedContent
+
+    if returnIndex then
+        updatedContent = content:sub(1, returnIndex - 1)
+            .. '\n\n'
+            .. block
+            .. '\n\n'
+            .. content:sub(returnIndex + 1)
+    else
+        local closingIndex = content:find('}%s*$')
+        if not closingIndex then
+            return false, ('Il file %s non sembra un jobs.lua valido (manca la parentesi finale o return finale).'):format(displayPath)
+        end
+
+        updatedContent = content:sub(1, closingIndex - 1)
+            .. '\n\n'
+            .. block
+            .. '\n'
+            .. content:sub(closingIndex)
+    end
 
     if filesystemPath then
         local writeHandle, writeErr = io.open(filesystemPath, 'w')
