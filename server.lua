@@ -52,15 +52,21 @@ end
 local function resolveQbxJobsPath()
     local configuredPath = normalizeString(GetConvar(QBX_JOBS_CONVAR, ''), '')
     if configuredPath and configuredPath ~= '' then
-        return configuredPath
+        return {
+            mode = 'absolute',
+            path = configuredPath
+        }
     end
 
-    local qbxPath = GetResourcePath('qbx_core')
-    if not qbxPath or qbxPath == '' then
-        return nil
+    if GetResourceState('qbx_core') == 'missing' then
+        return nil, 'La resource qbx_core non è stata trovata. Avviala o configura jobscreator_qbx_jobs_path con il path assoluto del jobs.lua.'
     end
 
-    return ('%s/shared/jobs.lua'):format(qbxPath)
+    return {
+        mode = 'resource',
+        resource = 'qbx_core',
+        file = 'shared/jobs.lua'
+    }
 end
 
 local function buildQbxJobBlock(job)
@@ -128,18 +134,31 @@ local function buildQbxJobBlock(job)
 end
 
 local function persistJobToQbxCore(job)
-    local jobsPath = resolveQbxJobsPath()
-    if not jobsPath then
-        return false, ('Impossibile risolvere il path di qbx_core/shared/jobs.lua. Configura +set %s <path_assoluto>.'):format(QBX_JOBS_CONVAR)
+    local target, resolveErr = resolveQbxJobsPath()
+    if not target then
+        return false, resolveErr or ('Impossibile risolvere il path di qbx_core/shared/jobs.lua. Configura +set %s <path_assoluto>.'):format(QBX_JOBS_CONVAR)
     end
 
-    local readHandle, readErr = io.open(jobsPath, 'r')
-    if not readHandle then
-        return false, ('Impossibile leggere %s: %s'):format(jobsPath, readErr or 'errore sconosciuto')
-    end
+    local content
+    local displayPath
 
-    local content = readHandle:read('*a')
-    readHandle:close()
+    if target.mode == 'resource' then
+        content = LoadResourceFile(target.resource, target.file)
+        displayPath = ('%s/%s'):format(target.resource, target.file)
+
+        if not content or content == '' then
+            return false, ('Impossibile leggere %s tramite LoadResourceFile.'):format(displayPath)
+        end
+    else
+        displayPath = target.path
+        local readHandle, readErr = io.open(displayPath, 'r')
+        if not readHandle then
+            return false, ('Impossibile leggere %s: %s'):format(displayPath, readErr or 'errore sconosciuto')
+        end
+
+        content = readHandle:read('*a')
+        readHandle:close()
+    end
 
     local escapedName = escapeLuaPattern(job.name)
     local existingBlockPattern = '%s*%-%- JOBSCREATOR:BEGIN '
@@ -151,7 +170,7 @@ local function persistJobToQbxCore(job)
 
     local closingIndex = content:find('}%s*$')
     if not closingIndex then
-        return false, ('Il file %s non sembra un jobs.lua valido (manca la parentesi finale).'):format(jobsPath)
+        return false, ('Il file %s non sembra un jobs.lua valido (manca la parentesi finale).'):format(displayPath)
     end
 
     local block = buildQbxJobBlock(job)
@@ -161,15 +180,24 @@ local function persistJobToQbxCore(job)
         .. '\n'
         .. content:sub(closingIndex)
 
-    local writeHandle, writeErr = io.open(jobsPath, 'w')
+    if target.mode == 'resource' then
+        local saved = SaveResourceFile(target.resource, target.file, updatedContent, -1)
+        if not saved then
+            return false, ('Impossibile scrivere %s tramite SaveResourceFile.'):format(displayPath)
+        end
+
+        return true, displayPath
+    end
+
+    local writeHandle, writeErr = io.open(displayPath, 'w')
     if not writeHandle then
-        return false, ('Impossibile scrivere %s: %s'):format(jobsPath, writeErr or 'errore sconosciuto')
+        return false, ('Impossibile scrivere %s: %s'):format(displayPath, writeErr or 'errore sconosciuto')
     end
 
     writeHandle:write(updatedContent)
     writeHandle:close()
 
-    return true, jobsPath
+    return true, displayPath
 end
 
 local function normalizeJob(payload)
